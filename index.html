@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Emotion Detection</title>
+</head>
+
+<body>
+
+    <h2>Emotion Detection (Text Based)</h2>
+
+    <textarea id="textInput" rows="4" cols="40" placeholder="Enter your text here"></textarea>
+    <br><br>
+
+    <button onclick="detectEmotion()">Detect Emotion</button>
+
+    <p id="output"></p>
+
+    <script>
+        function detectEmotion() {
+            let text = document.getElementById("textInput").value;
+
+            fetch("https://percept-backend.onrender.com/analyze", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ text: text })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById("output").innerText =
+                        "Detected Emotion: " + data.emotion;
+                });
+        }
+    </script>
+
+</body>
+
+</html>
