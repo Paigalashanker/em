@@ -12,13 +12,19 @@
     <textarea id="textInput" rows="4" cols="40" placeholder="Enter your text here"></textarea>
     <br><br>
 
-    <button onclick="detectEmotion()">Detect Emotion</button>
+    <button id="btn" onclick="detectEmotion()">Detect Emotion</button>
 
     <p id="output"></p>
 
     <script>
         function detectEmotion() {
+            let btn = document.getElementById("btn");
+            let output = document.getElementById("output");
             let text = document.getElementById("textInput").value;
+
+            // UI feedback
+            btn.disabled = true;
+            output.innerText = "Analyzing emotion... ⏳";
 
             fetch("https://percept-backend.onrender.com/analyze", {
                 method: "POST",
@@ -27,10 +33,15 @@
                 },
                 body: JSON.stringify({ text: text })
             })
-                .then(response => response.json())
+                .then(res => res.json())
                 .then(data => {
-                    document.getElementById("output").innerText =
-                        "Detected Emotion: " + data.emotion;
+                    output.innerText = "Detected Emotion: " + data.emotion;
+                })
+                .catch(() => {
+                    output.innerText = "Server waking up, please try again ⏳";
+                })
+                .finally(() => {
+                    btn.disabled = false;
                 });
         }
     </script>
