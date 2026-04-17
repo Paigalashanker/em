@@ -5,34 +5,225 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
     <title>Emotion Detection</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .tab-bar {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        .tab-btn {
+            padding: 10px 28px;
+            font-size: 16px;
+            border: 2px solid #555;
+            border-radius: 25px;
+            background: #fff;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .tab-btn.active {
+            background: #4a90e2;
+            color: #fff;
+            border-color: #4a90e2;
+        }
+
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        /* --- Text section --- */
+        #text-section textarea {
+            font-size: 18px;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            resize: vertical;
+        }
+
+        /* --- Face section --- */
+        #face-section .video-wrapper {
+            position: relative;
+            display: inline-block;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        }
+
+        #face-section video {
+            display: block;
+            border-radius: 12px;
+        }
+
+        #face-section canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* --- Shared buttons / output --- */
+        .action-btn {
+            margin-top: 16px;
+            padding: 10px 28px;
+            font-size: 16px;
+            background: #4a90e2;
+            color: #fff;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .action-btn:hover:not(:disabled) {
+            background: #357abd;
+        }
+
+        .action-btn:disabled {
+            background: #aaa;
+            cursor: default;
+        }
+
+        .stop-btn {
+            background: #e24a4a;
+        }
+
+        .stop-btn:hover:not(:disabled) {
+            background: #bd3535;
+        }
+
+        .output-text {
+            font-size: 20px;
+            margin-top: 16px;
+            color: #333;
+            min-height: 30px;
+        }
+
+        .emotion-badge {
+            display: inline-block;
+            padding: 6px 18px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 22px;
+            background: #e8f4e8;
+            color: #2a7a2a;
+            border: 2px solid #2a7a2a;
+        }
+
+        #face-emotions-list {
+            list-style: none;
+            padding: 0;
+            margin: 12px auto;
+            display: inline-block;
+            text-align: left;
+        }
+
+        #face-emotions-list li {
+            font-size: 16px;
+            margin: 4px 0;
+            color: #444;
+        }
+
+        #face-status {
+            font-size: 15px;
+            color: #888;
+            min-height: 22px;
+        }
+    </style>
 </head>
 
-<body align="center">
+<body>
 
-    <h2>Emotion Detection (Text Based)</h2>
+    <h1>Emotion Detection</h1>
 
-    <textarea style="text-align: center;font-size: 20px;" id="textInput" rows="2" cols="40" placeholder="Enter your text here"></textarea>
-    <br><br>
+    <!-- Tab navigation -->
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('text')">📝 Text Analysis</button>
+        <button class="tab-btn" onclick="switchTab('face')">😊 Facial Recognition</button>
+    </div>
 
-    <button id="btn" onclick="detectEmotion()">Detect Emotion</button>
+    <!-- ── Text-Based Emotion Detection ── -->
+    <div id="text-section" class="section active">
+        <h2>Text-Based Emotion Detection</h2>
+        <textarea id="textInput" rows="3" cols="44" placeholder="Enter your text here…"></textarea>
+        <br>
+        <button id="textBtn" class="action-btn" onclick="detectTextEmotion()">Detect Emotion</button>
+        <p id="textOutput" class="output-text"></p>
+    </div>
 
-    <p id="output"></p>
+    <!-- ── Facial Recognition Emotion Detection ── -->
+    <div id="face-section" class="section">
+        <h2>Facial Emotion Recognition</h2>
+        <p style="color:#666;font-size:14px;">Uses your webcam to detect emotions in real-time — all processing happens in your browser.</p>
+
+        <div class="video-wrapper">
+            <video id="faceVideo" width="480" height="360" autoplay muted playsinline></video>
+            <canvas id="faceCanvas"></canvas>
+        </div>
+
+        <br>
+        <button id="startFaceBtn" class="action-btn" onclick="startFaceDetection()">▶ Start Camera</button>
+        <button id="stopFaceBtn" class="action-btn stop-btn" onclick="stopFaceDetection()" style="display:none;">⏹ Stop Camera</button>
+
+        <p id="face-status">Click "Start Camera" to begin.</p>
+
+        <div id="faceOutput" class="output-text" style="display:none;">
+            <span>Dominant emotion: </span>
+            <span id="dominantEmotion" class="emotion-badge">—</span>
+            <br><br>
+            <ul id="face-emotions-list"></ul>
+        </div>
+    </div>
 
     <script>
-        function detectEmotion() {
-            let btn = document.getElementById("btn");
-            let output = document.getElementById("output");
-            let text = document.getElementById("textInput").value;
+        /* ─────────────────────────────────────────
+           Tab switching
+        ───────────────────────────────────────── */
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach((b, i) => {
+                b.classList.toggle('active', (tab === 'text' && i === 0) || (tab === 'face' && i === 1));
+            });
+            document.getElementById('text-section').classList.toggle('active', tab === 'text');
+            document.getElementById('face-section').classList.toggle('active', tab === 'face');
+        }
 
-            // UI feedback
+        /* ─────────────────────────────────────────
+           Text-based emotion detection
+        ───────────────────────────────────────── */
+        function detectTextEmotion() {
+            let btn = document.getElementById("textBtn");
+            let output = document.getElementById("textOutput");
+            let text = document.getElementById("textInput").value.trim();
+
+            if (!text) {
+                output.innerText = "Please enter some text first.";
+                return;
+            }
+
             btn.disabled = true;
-            output.innerText = "Analyzing emotion... ⏳";
+            output.innerText = "Analyzing emotion… ⏳";
 
             fetch("https://percept-backend.onrender.com/analyze", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ text: text })
             })
                 .then(res => res.json())
@@ -45,6 +236,157 @@
                 .finally(() => {
                     btn.disabled = false;
                 });
+        }
+
+        /* ─────────────────────────────────────────
+           Facial recognition emotion detection
+        ───────────────────────────────────────── */
+        const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
+        let faceDetectionInterval = null;
+        let videoStream = null;
+        let modelsLoaded = false;
+
+        async function loadFaceModels() {
+            const statusEl = document.getElementById('face-status');
+            statusEl.innerText = 'Loading face-detection models… ⏳';
+            await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+            await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+            modelsLoaded = true;
+            statusEl.innerText = 'Models loaded ✔';
+        }
+
+        async function startFaceDetection() {
+            const startBtn = document.getElementById('startFaceBtn');
+            const stopBtn = document.getElementById('stopFaceBtn');
+            const statusEl = document.getElementById('face-status');
+            const video = document.getElementById('faceVideo');
+            const canvas = document.getElementById('faceCanvas');
+            const outputDiv = document.getElementById('faceOutput');
+
+            startBtn.disabled = true;
+
+            // Load models on first use
+            if (!modelsLoaded) {
+                try {
+                    await loadFaceModels();
+                } catch (err) {
+                    statusEl.innerText = 'Failed to load models. Check your connection and try again.';
+                    startBtn.disabled = false;
+                    return;
+                }
+            }
+
+            // Request camera access
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                video.srcObject = videoStream;
+                await new Promise(resolve => { video.onloadedmetadata = resolve; });
+            } catch (err) {
+                statusEl.innerText = 'Camera access denied. Please allow camera permissions.';
+                startBtn.disabled = false;
+                return;
+            }
+
+            // Size the overlay canvas to match the video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'inline-block';
+            outputDiv.style.display = 'block';
+            statusEl.innerText = 'Detecting emotions in real-time…';
+
+            // Run detection loop using recursive setTimeout to avoid
+            // overlapping async operations if detection takes > 300 ms
+            let detecting = false;
+            async function runDetection() {
+                if (!faceDetectionInterval) return; // stopped
+                if (detecting) {
+                    faceDetectionInterval = setTimeout(runDetection, 300);
+                    return;
+                }
+                detecting = true;
+                try {
+                    const detections = await faceapi
+                        .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+                        .withFaceExpressions();
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    if (detections.length === 0) {
+                        document.getElementById('dominantEmotion').innerText = '—';
+                        document.getElementById('face-emotions-list').innerHTML = '';
+                        statusEl.innerText = 'No face detected. Please face the camera.';
+                    } else {
+                        statusEl.innerText = `${detections.length} face(s) detected.`;
+
+                        // Draw bounding boxes and expressions
+                        faceapi.draw.drawDetections(canvas, detections);
+                        faceapi.draw.drawFaceExpressions(canvas, detections);
+
+                        // Show dominant emotion for the first face
+                        const expressions = detections[0].expressions;
+                        const dominant = Object.entries(expressions)
+                            .reduce((a, b) => (b[1] > a[1] ? b : a));
+                        document.getElementById('dominantEmotion').innerText =
+                            `${capitalize(dominant[0])} ${emotionEmoji(dominant[0])}`;
+
+                        // Show all scores
+                        const list = document.getElementById('face-emotions-list');
+                        list.innerHTML = Object.entries(expressions)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([emotion, score]) =>
+                                `<li>${emotionEmoji(emotion)} <strong>${capitalize(emotion)}</strong>: ${(score * 100).toFixed(1)}%</li>`
+                            ).join('');
+                    }
+                } finally {
+                    detecting = false;
+                    if (faceDetectionInterval) {
+                        faceDetectionInterval = setTimeout(runDetection, 300);
+                    }
+                }
+            }
+            faceDetectionInterval = setTimeout(runDetection, 300);
+        }
+
+        function stopFaceDetection() {
+            if (faceDetectionInterval) {
+                clearTimeout(faceDetectionInterval);
+                faceDetectionInterval = null;
+            }
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+
+            const video = document.getElementById('faceVideo');
+            const canvas = document.getElementById('faceCanvas');
+            video.srcObject = null;
+            canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+
+            document.getElementById('startFaceBtn').style.display = 'inline-block';
+            document.getElementById('startFaceBtn').disabled = false;
+            document.getElementById('stopFaceBtn').style.display = 'none';
+            document.getElementById('faceOutput').style.display = 'none';
+            document.getElementById('face-status').innerText = 'Camera stopped. Click "Start Camera" to begin again.';
+        }
+
+        function capitalize(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        function emotionEmoji(emotion) {
+            const map = {
+                happy: '😄',
+                sad: '😢',
+                angry: '😠',
+                fearful: '😨',
+                disgusted: '🤢',
+                surprised: '😲',
+                neutral: '😐'
+            };
+            return map[emotion] || '🙂';
         }
     </script>
 
